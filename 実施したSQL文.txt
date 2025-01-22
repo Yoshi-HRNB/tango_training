@@ -1,0 +1,259 @@
+-- =======================================
+-- 1. すでにテーブルが存在する場合に削除
+-- =======================================
+DROP TABLE IF EXISTS test_attempt_details;
+DROP TABLE IF EXISTS test_attempts;
+DROP TABLE IF EXISTS test_details;
+DROP TABLE IF EXISTS tests;
+DROP TABLE IF EXISTS word_statistics;
+DROP TABLE IF EXISTS examples;
+DROP TABLE IF EXISTS translations;
+DROP TABLE IF EXISTS words;
+DROP TABLE IF EXISTS users;
+
+-- =======================================
+-- 2. テーブル作成
+-- =======================================
+
+-- ---------- users テーブル ----------
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,    -- ユーザーのメールアドレス (ユニーク制約)
+    password VARCHAR(255) NOT NULL,        -- パスワード (ハッシュ化推奨)
+    name VARCHAR(255) NOT NULL,            -- 表示名・本名など
+    role VARCHAR(50) NOT NULL DEFAULT 'user', -- 例: 'admin', 'user'
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- ---------- words テーブル ----------
+CREATE TABLE words (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    language_code VARCHAR(10) NOT NULL,    -- 言語コード (例: 'ja', 'en', 'vi')
+    word VARCHAR(255) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- ---------- translations テーブル ----------
+CREATE TABLE translations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    word_id INT NOT NULL,                  -- 翻訳元の単語 ID
+    translation_language_code VARCHAR(10) NOT NULL, -- 翻訳先の言語コード
+    translation VARCHAR(255) NOT NULL,     -- 翻訳テキスト
+    note TEXT DEFAULT NULL,                -- 補足事項
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
+);
+
+-- ---------- examples テーブル ----------
+CREATE TABLE examples (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    word_id INT NOT NULL,             -- 関連する単語の ID
+    example_text TEXT NOT NULL,       -- 例文
+    translation TEXT DEFAULT NULL,    -- 例文の翻訳
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
+);
+
+-- ---------- word_statistics テーブル ----------
+CREATE TABLE word_statistics (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    word_id INT NOT NULL,            -- words テーブルの ID
+    test_count INT DEFAULT 0,        -- テスト実施回数
+    correct_count INT DEFAULT 0,     -- 正答数
+    wrong_count INT DEFAULT 0,       -- 誤答数
+    accuracy_rate DECIMAL(5,2) DEFAULT 0.00, -- 正答率 (correct_count / test_count)
+    first_test_date DATETIME DEFAULT NULL,
+    last_test_date DATETIME DEFAULT NULL,
+    last_result BOOLEAN DEFAULT NULL,    -- 最後のテスト結果 (1:正解, 0:誤答)
+    mastery_level TINYINT DEFAULT 1,     -- 習熟度 (1:初級,2:中級,3:上級 など)
+    average_response_time DECIMAL(5,2) DEFAULT NULL, -- 平均解答時間(秒)
+    fastest_response_time DECIMAL(5,2) DEFAULT NULL,
+    slowest_response_time DECIMAL(5,2) DEFAULT NULL,
+    test_type_breakdown JSON DEFAULT NULL, -- テストタイプごとの結果 (JSON)
+    user_id INT DEFAULT NULL,          -- ユーザーID (必要に応じて)
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
+);
+
+-- ---------- tests テーブル ----------
+CREATE TABLE tests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,           -- テスト名
+    description TEXT DEFAULT NULL,        -- テストの説明
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- ---------- test_details テーブル ----------
+CREATE TABLE test_details (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    test_id INT NOT NULL,                 -- tests テーブルの ID
+    word_id INT DEFAULT NULL,             -- words テーブルの ID (単語テストの場合)
+    question_text TEXT DEFAULT NULL,      -- 設問文
+    correct_answer TEXT DEFAULT NULL,     -- 正解
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
+    -- FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE SET NULL など必要に応じて
+);
+
+-- ---------- test_attempts テーブル ----------
+CREATE TABLE test_attempts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    test_id INT NOT NULL,               -- どのテストを受験したか
+    user_id INT NOT NULL,               -- どのユーザーが受験したか
+    attempt_date DATETIME NOT NULL,     -- 受験日時
+    score INT DEFAULT NULL,             -- テスト全体のスコア
+    total_questions INT DEFAULT NULL,   -- テスト全体の問題数
+    time_spent INT DEFAULT NULL,        -- 解答にかかった時間(秒)
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- ---------- test_attempt_details テーブル ----------
+CREATE TABLE test_attempt_details (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    test_attempt_id INT NOT NULL,      -- test_attempts テーブルの ID
+    test_detail_id INT NOT NULL,       -- test_details テーブルの ID
+    user_answer TEXT DEFAULT NULL,     -- ユーザーが回答した内容
+    is_correct BOOLEAN DEFAULT NULL,   -- 正解/不正解
+    response_time INT DEFAULT NULL,    -- その問題に要した時間(秒)
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (test_attempt_id) REFERENCES test_attempts(id) ON DELETE CASCADE,
+    FOREIGN KEY (test_detail_id) REFERENCES test_details(id) ON DELETE CASCADE
+);
+
+-- =======================================
+-- 3. サンプルデータの挿入
+-- =======================================
+
+-- ---------- (1) users テーブル ----------
+INSERT INTO users (email, password, name, role)
+VALUES
+('user1@example.com', 'hashed_pass_1', 'Alice', 'user'),
+('user2@example.com', 'hashed_pass_2', 'Bob', 'user'),
+('admin@example.com', 'hashed_pass_3', 'AdminUser', 'admin');
+
+-- ---------- (2) words テーブル (100件) ----------
+INSERT INTO words (language_code, word) VALUES
+-- 1～33: English
+('en','hello'),
+('en','thank you'),
+('en','goodbye'),
+('en','yes'),
+('en','no'),
+('en','please'),
+('en','sorry'),
+('en','excuse me'),
+('en','good morning'),
+('en','good night'),
+('en','cat'),
+('en','dog'),
+('en','bird'),
+('en','car'),
+('en','bicycle'),
+('en','house'),
+('en','school'),
+('en','market'),
+('en','hospital'),
+('en','water'),
+('en','food'),
+('en','rice'),
+('en','fish'),
+('en','meat'),
+('en','apple'),
+('en','banana'),
+('en','orange'),
+('en','book'),
+('en','pen'),
+('en','bag'),
+('en','table'),
+('en','chair'),
+('en','computer'),
+
+-- 34～66: Vietnamese
+('vi','xin chào'),
+('vi','cảm ơn'),
+('vi','tạm biệt'),
+('vi','vâng'),
+('vi','không'),
+('vi','làm ơn'),
+('vi','xin lỗi'),
+('vi','xin phép'),
+('vi','chào buổi sáng'),
+('vi','chúc ngủ ngon'),
+('vi','con mèo'),
+('vi','con chó'),
+('vi','con chim'),
+('vi','xe hơi'),
+('vi','xe đạp'),
+('vi','ngôi nhà'),
+('vi','trường học'),
+('vi','chợ'),
+('vi','bệnh viện'),
+('vi','nước'),
+('vi','thức ăn'),
+('vi','gạo'),
+('vi','cá'),
+('vi','thịt'),
+('vi','táo'),
+('vi','chuối'),
+('vi','cam'),
+('vi','quyển sách'),
+('vi','cây bút'),
+('vi','cái túi'),
+('vi','cái bàn'),
+('vi','cái ghế'),
+('vi','máy tính'),
+
+-- 67～100: Japanese
+('ja','こんにちは'),
+('ja','ありがとう'),
+('ja','さようなら'),
+('ja','はい'),
+('ja','いいえ'),
+('ja','お願いします'),
+('ja','すみません'),
+('ja','失礼します'),
+('ja','おはよう'),
+('ja','おやすみなさい'),
+('ja','猫'),
+('ja','犬'),
+('ja','鳥'),
+('ja','車'),
+('ja','自転車'),
+('ja','家'),
+('ja','学校'),
+('ja','市場'),
+('ja','病院'),
+('ja','水'),
+('ja','食べ物'),
+('ja','ご飯'),
+('ja','魚'),
+('ja','肉'),
+('ja','りんご'),
+('ja','バナナ'),
+('ja','オレンジ'),
+('ja','本'),
+('ja','ペン'),
+('ja','かばん'),
+('ja','机'),
+('ja','いす'),
+('ja','パソコン'),
+('ja','愛');
+
+-- ここでは translations / examples / word_statistics / tests / test_details / test_attempts /
+-- test_attempt_details は必要に応じて INSERT してください。
+-- 必要最小限のサンプルデータであれば、上記 users と words だけでも動作確認できます。
+
+-- =======================================
+-- 以上でテーブル作成＆基本サンプルデータ挿入完了
+-- =======================================

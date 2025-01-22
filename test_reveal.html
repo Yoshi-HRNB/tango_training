@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>単語テスト（答えを見る＋正解/不正解チェック）</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- スマホで見やすい簡易スタイル -->
+    <style>
+      body {
+        margin: 0;
+        padding: 0 1em;
+        font-family: sans-serif;
+        background: #f2f2f2;
+      }
+      h1 {
+        text-align: center;
+        margin: 0.5em 0;
+      }
+      .word-list {
+        margin: 1em 0;
+        background: #fff;
+        padding: 1em;
+        border-radius: 8px;
+      }
+      .word-item {
+        margin-bottom: 1.5em;
+        padding: 0.5em;
+        border-bottom: 1px solid #ddd;
+        display: flex;
+        flex-direction: column;
+      }
+      .word-item:last-child {
+        border-bottom: none;
+      }
+      .word-question {
+        font-size: 1.1em;
+        font-weight: bold;
+        margin-bottom: 0.5em;
+      }
+      .buttons-row {
+        margin-top: 0.5em;
+        display: flex;
+        gap: 0.5em;
+      }
+      button {
+        padding: 0.6em 0.8em;
+        border: none;
+        border-radius: 4px;
+        font-size: 0.9em;
+        cursor: pointer;
+      }
+      .reveal-button {
+        background: #0275d8;
+        color: #fff;
+      }
+      .correct-button {
+        background: #5cb85c;
+        color: #fff;
+        flex: 1;
+      }
+      .incorrect-button {
+        background: #d9534f;
+        color: #fff;
+        flex: 1;
+      }
+      .translation {
+        display: none; /* 初期は非表示 */
+        color: #333;
+        background: #f9f9f9;
+        padding: 0.5em;
+        border-radius: 4px;
+        margin-top: 0.5em;
+        font-size: 1em;
+      }
+      .answered-correct {
+        border-left: 4px solid #5cb85c;
+      }
+      .answered-incorrect {
+        border-left: 4px solid #d9534f;
+      }
+      /* ページングボタン */
+      .paging-buttons {
+        display: flex;
+        justify-content: space-between;
+        margin: 1em 0;
+      }
+      /* スコア表示 */
+      #scoreDisplay {
+        text-align: center;
+        margin: 1em 0;
+        font-size: 1.1em;
+        font-weight: bold;
+      }
+      /* リンク群 */
+      .links {
+        margin-bottom: 1em;
+        text-align: center;
+      }
+      a {
+        color: #0275d8;
+        text-decoration: none;
+        margin: 0 0.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>単語テスト</h1>
+    <p style="text-align: center">
+      答えを見るボタンで訳を確認し、「正解 /
+      不正解」ボタンで自己チェックできます。
+    </p>
+
+    <div class="links">
+      <a href="index.php">トップに戻る</a> |
+      <a href="Test.html">入力テストモード</a>
+    </div>
+
+    <!-- スコア表示 -->
+    <div id="scoreDisplay">読み込み中...</div>
+
+    <!-- 単語一覧を表示する領域 -->
+    <div id="wordContainer" class="word-list"></div>
+
+    <!-- ページネーション用ボタン -->
+    <div class="paging-buttons">
+      <button id="prevBtn" onclick="prevPage()">前の10件</button>
+      <button id="nextBtn" onclick="nextPage()">次の10件</button>
+    </div>
+
+    <script>
+      let words = []; // fetch_test_words.phpから取得したデータ
+      let userChecks = []; // ユーザーが「正解/不正解」を選んだかどうかを保持（true/false/null）
+      let currentPage = 0; // 現在のページ番号（0スタート）
+      const pageSize = 10; // 1ページあたりに表示する単語数
+
+      // ページ読込時に単語を取得
+      window.onload = async function () {
+        try {
+          const response = await fetch("fetch_test_words.php");
+          if (!response.ok) {
+            throw new Error(`HTTPエラー: ${response.status}`);
+          }
+          words = await response.json();
+          // userChecks配列を単語数と同じ長さで初期化(nullは未回答の意味)
+          userChecks = new Array(words.length).fill(null);
+
+          // 初期ページを表示
+          renderPage();
+        } catch (error) {
+          console.error("単語の取得に失敗:", error);
+          document.getElementById("wordContainer").innerText =
+            "単語を読み込めませんでした。";
+          document.getElementById("scoreDisplay").innerText = "";
+        }
+      };
+
+      // ページを描画
+      function renderPage() {
+        const container = document.getElementById("wordContainer");
+        container.innerHTML = ""; // 表示領域をクリア
+
+        const startIndex = currentPage * pageSize;
+        const endIndex = Math.min(startIndex + pageSize, words.length);
+        const pageWords = words.slice(startIndex, endIndex);
+
+        if (pageWords.length === 0) {
+          container.innerText = "表示する単語がありません。";
+          document.getElementById("scoreDisplay").innerText = "";
+          updatePaginationButtons();
+          return;
+        }
+
+        pageWords.forEach((item, idx) => {
+          // グローバル配列でのインデックス
+          const globalIndex = startIndex + idx;
+
+          // 単語項目のラッパ
+          const div = document.createElement("div");
+          div.classList.add("word-item");
+
+          // 既に正解/不正解が選ばれていれば装飾をつける
+          if (userChecks[globalIndex] === true) {
+            div.classList.add("answered-correct");
+          } else if (userChecks[globalIndex] === false) {
+            div.classList.add("answered-incorrect");
+          }
+
+          // 単語テキスト
+          const questionSpan = document.createElement("div");
+          questionSpan.classList.add("word-question");
+          questionSpan.textContent = item.word;
+
+          // 「答えを見る」ボタン
+          const revealBtn = document.createElement("button");
+          revealBtn.classList.add("reveal-button");
+          revealBtn.textContent = "答えを見る";
+          revealBtn.addEventListener("click", () => showAnswer(globalIndex));
+
+          // 訳表示領域
+          const translationDiv = document.createElement("div");
+          translationDiv.id = `translation-${globalIndex}`;
+          translationDiv.classList.add("translation"); // 最初はdisplay:none
+
+          // 正解/不正解ボタンを並べた行
+          const checkButtonsRow = document.createElement("div");
+          checkButtonsRow.classList.add("buttons-row");
+
+          // 正解ボタン
+          const correctBtn = document.createElement("button");
+          correctBtn.textContent = "正解";
+          correctBtn.classList.add("correct-button");
+          correctBtn.addEventListener("click", () =>
+            markAnswer(globalIndex, true, div)
+          );
+
+          // 不正解ボタン
+          const incorrectBtn = document.createElement("button");
+          incorrectBtn.textContent = "不正解";
+          incorrectBtn.classList.add("incorrect-button");
+          incorrectBtn.addEventListener("click", () =>
+            markAnswer(globalIndex, false, div)
+          );
+
+          checkButtonsRow.appendChild(correctBtn);
+          checkButtonsRow.appendChild(incorrectBtn);
+
+          // 配置
+          div.appendChild(questionSpan);
+          div.appendChild(revealBtn);
+          div.appendChild(translationDiv);
+          div.appendChild(checkButtonsRow);
+
+          container.appendChild(div);
+        });
+
+        // スコア表示更新
+        updateScoreDisplay();
+        // ページングボタンの有効/無効
+        updatePaginationButtons();
+      }
+
+      // 「答えを見る」ボタンが押された時、訳を表示する
+      function showAnswer(index) {
+        const translationDiv = document.getElementById(`translation-${index}`);
+        if (!translationDiv) return;
+        translationDiv.textContent = words[index].word_translation;
+        translationDiv.style.display = "block";
+      }
+
+      // 正解/不正解ボタンが押された時
+      function markAnswer(index, isCorrect, containerDiv) {
+        // userChecksに結果を保存
+        userChecks[index] = isCorrect;
+
+        // 枠線の色を変える
+        containerDiv.classList.remove("answered-correct", "answered-incorrect");
+        containerDiv.classList.add(
+          isCorrect ? "answered-correct" : "answered-incorrect"
+        );
+
+        // スコア表示更新
+        updateScoreDisplay();
+      }
+
+      // スコア表示を更新（全単語の中で「正解」がいくつか）
+      function updateScoreDisplay() {
+        const totalAnswered = userChecks.filter((v) => v !== null).length;
+        const totalCorrect = userChecks.filter((v) => v === true).length;
+        const totalWords = words.length;
+        // スコアテキスト
+        const text = `現在のスコア: ${totalCorrect} / ${totalAnswered} (全${totalWords}問)`;
+        document.getElementById("scoreDisplay").textContent = text;
+      }
+
+      // 前のページへ
+      function prevPage() {
+        if (currentPage > 0) {
+          currentPage--;
+          renderPage();
+        }
+      }
+
+      // 次のページへ
+      function nextPage() {
+        const maxPage = Math.floor((words.length - 1) / pageSize);
+        if (currentPage < maxPage) {
+          currentPage++;
+          renderPage();
+        }
+      }
+
+      // 「前の10件」「次の10件」ボタンの有効/無効を更新
+      function updatePaginationButtons() {
+        const prevBtn = document.getElementById("prevBtn");
+        const nextBtn = document.getElementById("nextBtn");
+
+        const maxPage = Math.floor((words.length - 1) / pageSize);
+
+        prevBtn.disabled = currentPage <= 0;
+        nextBtn.disabled = currentPage >= maxPage;
+      }
+    </script>
+  </body>
+</html>

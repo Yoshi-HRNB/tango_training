@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>単語テスト</title>
+    <script>
+      let questions = [];
+      let currentQuestion = 0;
+      let score = 0;
+
+      async function loadQuestions() {
+        try {
+          const response = await fetch("fetch_test_words.php");
+          if (!response.ok) {
+            throw new Error(`HTTPエラー: ${response.status}`);
+          }
+          questions = await response.json();
+          console.log("取得した問題:", questions);
+          showQuestion();
+        } catch (error) {
+          console.error("問題の取得に失敗:", error);
+          document.getElementById("quiz").innerText =
+            "問題を読み込めませんでした。";
+        }
+      }
+
+      function showQuestion() {
+        if (currentQuestion < questions.length) {
+          document.getElementById("question").innerText = `問題 ${
+            currentQuestion + 1
+          }: ${questions[currentQuestion].word}`;
+          document.getElementById("answer").value = "";
+        } else {
+          showResult();
+        }
+      }
+
+      function checkAnswer() {
+        const userAnswer = document.getElementById("answer").value.trim();
+        if (userAnswer === questions[currentQuestion].word_translation) {
+          score++;
+        }
+        currentQuestion++;
+        showQuestion();
+      }
+
+      function showResult() {
+        document.getElementById("quiz").style.display = "none";
+        document.getElementById(
+          "result"
+        ).innerText = `テスト終了! スコア: ${score} / ${questions.length}`;
+      }
+
+      window.onload = loadQuestions;
+    </script>
+  </head>
+  <body>
+    <h1>単語テスト</h1>
+    <div id="quiz">
+      <p id="question"></p>
+      <input type="text" id="answer" placeholder="答えを入力" />
+      <button onclick="checkAnswer()">送信</button>
+    </div>
+    <p id="result"></p>
+    <a href="index.php">戻る</a><br />
+  </body>
+</html>
